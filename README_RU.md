@@ -125,32 +125,97 @@ template: >-
 
 ***
 
-### 4. Динамический расчёт объёма воды в литрах
+### 4. Расход энергии + Затраты (`cost_entity`) (Template)
 
-При известной производительности форсунок (например, 15 л/мин) можно вывести общее количество вылитой воды:
+Если в системе уже ведется учет стоимости отдельным сенсором:
 
 ```yaml
 type: custom:energy-duration-tile-card
-entity: sensor.irrigation_watering_duration_zone2_yearly
-name: Расход воды
-template: "{{ duration }} ({{ (value * 60 * 15) | round }} л)"
+entity: sensor.haus_energy_t
+cost_entity: sensor.haus_energy_t_cost
+stat_type: change
+template: "{{ duration }} · {{ formatted_cost }}"
+```
+*(При незаполненном поле `template` такой формат применяется автоматически).*  
+**Результат:** `2 515,69 kWh · 638,76 €`
+
+***
+
+### 5. Время и стоимость рядом (Template)
+
+Вывод нативного времени работы и расчетной стоимости по фиксированному тарифу:
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.irrigation_watering_duration_zone1_yearly
+stat_type: change
+template: "{{ duration }} · {{ (value * 1.80) | round(2) }} €"
+```
+**Результат:** `41 ч 8 мин · 74.04 €`
+
+***
+
+### 6. Расчёт с тарифом из другого сенсора (Template)
+
+Динамический расчет стоимости с получением актуальной цены из сенсора или `input_number`:
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.haus_energy_t
+stat_type: change
+template: >-
+  {% set tariff = states('sensor.electricity_price') | float(0.35) %}
+  {{ duration }} · {{ (value * tariff) | round(2) }} €
+```
+**Результат:** `2 515,69 kWh · 880.49 €`
+
+***
+
+### 7. Время и расход воды в литрах / кубометрах (Template)
+
+Расчет расхода воды на основе минут полива (например, при расходе форсунок 15 л/мин):
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.irrigation_watering_duration_zone1_yearly
+stat_type: change
+template: "{{ duration }} ({{ (minutes * 15) | round }} л)"
 ```
 **Результат:** `41 ч 8 мин (37020 л)`
+*Для вывода в кубометрах (\(м^3\)):*
+
+```yaml
+template: "{{ duration }} ({{ ((minutes * 15) / 1000) | round(2) }} м³)"
+```
+**Результат:** `41 ч 8 мин (37.02 м³)`
+
+***
+
+### 8. Только стоимость (Template)
+
+Полная замена строки состояния вычисленной стоимостью:
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.irrigation_watering_duration_zone1_yearly
+stat_type: change
+template: "{{ (value * 1.80) | round(2) }} €"
+```
+**Результат:** `74.04 €`
 
 ***
 
 ## Переменные шаблона (`template`)
 
-В Jinja2-шаблоне доступны следующие контекстные переменные :
-
-| Переменная | Тип | Описание | Пример значения |
+| Переменная | Тип | Описание | Пример |
 | :--- | :--- | :--- | :--- |
-| `value` | `float` | Числовое значение за период | `2515.69` или `41.13` |
-| `duration` | `string` | Нативно отформатированное состояние основной сущности | `"2 515,69 kWh"` или `"41 ч 8 мин"`  |
-| `formatted_state` | `string` | Синоним для `duration` | `"2 515,69 kWh"` |
+| `value` | `float` | Числовое значение за период | `41.13` или `2515.69` |
+| `duration` | `string` | Нативно отформатированное состояние основной сущности | `"41 ч 8 мин"` или `"2 515,69 kWh"`  |
+| `formatted_state` | `string` | Синоним переменной `duration` | `"41 ч 8 мин"` |
+| `minutes` | `integer` | Время в минутах (`value * 60`) | `2468` |
 | `cost` | `float` | Числовое значение затрат из `cost_entity` | `638.76` |
-| `formatted_cost` | `string` | Нативно отформатированное состояние сенсора затрат | `"638,76 €"` |
-| `entity` | `string` | ID основного сенсора | `"sensor.haus_energy_t"` |
-| `cost_entity` | `string` | ID сенсора затрат | `"sensor.haus_energy_t_cost"` |
+| `formatted_cost` | `string` | Нативно отформатированная строка сенсора затрат | `"638,76 €"` |
+| `entity` | `string` | ID основной сущности | `"sensor.haus_energy_t"` |
+| `cost_entity` | `string` | ID сущности затрат | `"sensor.haus_energy_t_cost"` |
 
 Также доступны все стандартные функции и фильтры Home Assistant: `states()`, `is_state()`, `float`, `round`, `now()` и другие .
