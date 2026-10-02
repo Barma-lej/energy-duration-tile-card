@@ -102,47 +102,99 @@ grid_options:
 ```
 **Output:** `2 515,69 kWh · 638,76 €`
 
-### 3. Flat-Rate Cost Calculation (Template)
+### 3. Paired Cost Sensor (`cost_entity`) (Template)
 
-Calculate estimated expenditure on the fly using a helper tariff:
+When tracking costs with an existing recorder cost sensor:
 
 ```yaml
 type: custom:energy-duration-tile-card
-entity: sensor.irrigation_watering_duration_zone2_yearly
-name: Lawn Sprinklers
+entity: sensor.haus_energy_t
+cost_entity: sensor.haus_energy_t_cost
 stat_type: change
-template: >-
-  {% set tariff = states('input_number.water_tariff_hourly') | float(1.80) %}
-  {{ duration }} · {{ (value * tariff) | round(2) }} €
+template: "{{ duration }} · {{ formatted_cost }}"
+```
+*(If `template` is left empty, this format is applied automatically).*  
+**Output:** `2 515,69 kWh · 638,76 €`
+
+***
+
+### 4. Duration and Cost Side-by-Side (Template)
+
+Displays the native duration string alongside flat-rate computed cost:
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.irrigation_watering_duration_zone1_yearly
+stat_type: change
+template: "{{ duration }} · {{ (value * 1.80) | round(2) }} €"
 ```
 **Output:** `41 h 8 min · 74.04 €`
 
-### 4. Dynamic Volume Estimation
+***
 
-Derive total litres from known sprinkler nozzle discharge rates:
+### 5. Tariff Calculation from Dynamic Sensor (Template)
+
+Calculates total expense based on real-time price entities or tariff helpers:
 
 ```yaml
 type: custom:energy-duration-tile-card
-entity: sensor.irrigation_watering_duration_zone2_yearly
-name: Water Volume
-template: "{{ duration }} ({{ (value * 60 * 15) | round }} L)"
+entity: sensor.haus_energy_t
+stat_type: change
+template: >-
+  {% set tariff = states('sensor.electricity_price') | float(0.35) %}
+  {{ duration }} · {{ (value * tariff) | round(2) }} €
+```
+**Output:** `2 515,69 kWh · 880.49 €`
+
+***
+
+### 6. Duration and Water Consumption in Litres / Cubic Metres (Template)
+
+Estimates water usage using irrigation run time (e.g., 15 L/min nozzle flow rate):
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.irrigation_watering_duration_zone1_yearly
+stat_type: change
+template: "{{ duration }} ({{ (minutes * 15) | round }} L)"
 ```
 **Output:** `41 h 8 min (37020 L)`
+
+*For cubic metres (\(m^3\)):*
+```yaml
+template: "{{ duration }} ({{ ((minutes * 15) / 1000) | round(2) }} m³)"
+```
+**Output:** `41 h 8 min (37.02 m³)`
+
+***
+
+### 7. Cost Only
+
+Replaces the primary status line completely with calculated monetary value:
+
+```yaml
+type: custom:energy-duration-tile-card
+entity: sensor.irrigation_watering_duration_zone1_yearly
+stat_type: change
+template: "{{ (value * 1.80) | round(2) }} €"
+```
+**Output:** `74.04 €`
 
 ***
 
 ## Template Variables
 
-The following context variables are exposed to the Jinja2 engine :
+The following context variables are exposed to the Jinja2 engine:
 
 | Variable | Type | Description | Example |
 | :--- | :--- | :--- | :--- |
-| `value` | float | Calculated numeric value over the selected interval | `2515.69` |
-| `duration` | string | Formatted primary entity state | `"2 515,69 kWh"` or `"41 h 8 min"`  |
-| `formatted_state` | string | Alias of `duration` | `"2 515,69 kWh"` |
-| `cost` | float | Calculated numeric cost from `cost_entity` | `638.76` |
-| `formatted_cost` | string | Formatted cost entity state with currency symbol | `"638,76 €"` |
-| `entity` | string | Primary entity identifier | `"sensor.haus_energy_t"` |
-| `cost_entity` | string | Secondary cost entity identifier | `"sensor.haus_energy_t_cost"` |
+| `value` | `float` | Calculated interval value | `41.13` or `2515.69` |
+| `duration` | `string` | Formatted primary entity state | `"41 h 8 min"` or `"2 515,69 kWh"`  |
+| `formatted_state` | `string` | Alias for `duration` | `"41 h 8 min"` |
+| `minutes` | `integer` | Value expressed in total minutes (`value * 60`) | `2468` |
+| `cost` | `float` | Calculated monetary value from `cost_entity` | `638.76` |
+| `formatted_cost` | `string` | Formatted cost string with currency | `"638,76 €"` |
+| `entity` | `string` | Primary sensor entity ID | `"sensor.haus_energy_t"` |
+| `cost_entity` | `string` | Secondary cost sensor entity ID | `"sensor.haus_energy_t_cost"` |
 
 Standard Home Assistant functions such as `states()`, `float`, `round`, and `now()` remain accessible .
