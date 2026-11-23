@@ -136,10 +136,16 @@ class EnergyDurationTileCard extends HTMLElement {
 
   _getTileConfig() {
     const tileConfig = { ...this._config, type: "tile" };
+
     delete tileConfig.collection_key;
     delete tileConfig.stat_type;
     delete tileConfig.template;
     delete tileConfig.cost_entity;
+
+    if (this._config.template?.trim() || this._config.cost_entity) {
+      tileConfig.state_content = "energy_tile_display";
+    }
+
     return tileConfig;
   }
 
@@ -172,81 +178,66 @@ class EnergyDurationTileCard extends HTMLElement {
   }
 
   _updateTileHass() {
-    if (!this._card || !this._hass) return;
+    if (!this._card || !this._hass || !this._config) return;
 
     const entityId = this._config.entity;
-    const origState = this._hass.states?.[entityId];
+    const originalState = this._hass.states[entityId];
 
-    if (!origState) {
+    if (!originalState) {
       this._card.hass = this._hass;
       return;
     }
 
-    const numericValue =
-      this._calculatedValue !== null && this._calculatedValue !== undefined
-        ? this._calculatedValue
-        : origState.state;
+    const hasValue = this._calculatedValue != null;
+    const hasTemplate = Boolean(this._config.template?.trim());
 
     const virtualState = {
-      ...origState,
-      state: String(numericValue),
-      attributes: { ...origState.attributes },
+      ...originalState,
+      state: hasValue
+        ? String(this._calculatedValue)
+        : originalState.state,
+      attributes: { ...originalState.attributes },
     };
 
-    const virtualHass = {
+    const mainFormatted = hasValue
+      ? this._hass.formatEntityState(virtualState)
+      : "—";
+
+    let displayText = mainFormatted;
+
+    if (hasTemplate) {
+      displayText = this._templateResult != null
+        ? String(this._templateResult)
+        : "—";
+    } else if (this._config.cost_entity) {
+      const costState =
+        this._hass.states[this._config.cost_entity];
+
+      if (costState && this._calculatedCost != null) {
+        const virtualCostState = {
+          ...costState,
+          state: String(this._calculatedCost),
+          attributes: { ...costState.attributes },
+        };
+
+        const costFormatted =
+          this._hass.formatEntityState(virtualCostState);
+
+        displayText = `${mainFormatted} · ${costFormatted}`;
+      } else {
+        displayText = `${mainFormatted} · —`;
+      }
+    }
+
+    virtualState.attributes.energy_tile_display = displayText;
+
+    this._card.hass = {
       ...this._hass,
       states: {
         ...this._hass.states,
         [entityId]: virtualState,
       },
     };
-
-    const hasCustomTemplate = Boolean(this._config.template && this._templateResult !== null);
-    const hasAutoCost = Boolean(
-      !this._config.template &&
-      this._config.cost_entity &&
-      this._calculatedCost !== null &&
-      this._calculatedValue !== null
-    );
-
-    if (hasCustomTemplate || hasAutoCost) {
-      let displayText = "";
-
-      if (hasCustomTemplate) {
-        displayText = String(this._templateResult);
-      } else {
-        // Автоматическое объединение расхода и стоимости при отсутствии template
-        const mainFormatted = this._hass.formatEntityState
-          ? this._hass.formatEntityState(virtualState)
-          : `${numericValue} ${origState.attributes?.unit_of_measurement || ""}`.trim();
-
-        const costState = this._hass.states?.[this._config.cost_entity];
-        const virtualCost = {
-          ...costState,
-          state: String(this._calculatedCost),
-          attributes: { ...(costState?.attributes || {}) },
-        };
-
-        const costFormatted = this._hass.formatEntityState
-          ? this._hass.formatEntityState(virtualCost)
-          : `${this._calculatedCost} €`;
-
-        displayText = `${mainFormatted} · ${costFormatted}`;
-      }
-
-      const origFormat = this._hass.formatEntityState
-        ? this._hass.formatEntityState.bind(this._hass)
-        : null;
-
-      virtualHass.formatEntityState = (stateObj, state) => {
-        if (stateObj?.entity_id === entityId) {
-          return displayText;
-        }
-        return origFormat ? origFormat(stateObj, state) : (state ?? stateObj?.state);
-      };
-    }
-
-    this._card.hass = virtualHass;
   }
 
   _findCollection() {
